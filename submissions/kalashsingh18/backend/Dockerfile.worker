@@ -3,8 +3,7 @@ FROM python:3.11-slim
 WORKDIR /app
 
 COPY requirements.txt .
-RUN --mount=type=cache,target=/root/.cache/pip \
-    python -m pip install --retries 10 --timeout 300 -r requirements.txt
+RUN python -m pip install --no-cache-dir --retries 10 --timeout 300 -r requirements.txt
 
 COPY . .
 
