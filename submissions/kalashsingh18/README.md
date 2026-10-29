@@ -1,7 +1,7 @@
 # DocuMind: Enterprise-Grade Grounded AI Knowledge Assistant
 
 > **Live Deployment**: https://documind-production.up.railway.app  
-> **Demo Video**: [Google Drive Walkthrough (Public View)](https://drive.google.com/file/d/your-demo-video-link-here/view)  
+> **Demo Video**: [Google Drive Walkthrough (Public View)](https://drive.google.com/drive/folders/1blx7hKihqr9dj4tokhoE6ZCA2UBWh3CP?usp=sharing)  
 > **Resume**: [`submissions/kalashsingh18/RESUME.pdf`](file:///Users/vaidikchouhan/Downloads/assesment/Software-Engineering-Assesment/submissions/kalashsingh18/RESUME.pdf)  
 
 ---
