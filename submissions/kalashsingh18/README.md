@@ -127,7 +127,7 @@ docker compose up --build
 *(To run in the background, append `-d`: `docker compose up --build -d`)*
 
 ### Step 4: Access Services
-- **Web Interface**: [http://localhost:3000](http://localhost:3000)
+- **Web Interface**: [http://localhost:4000](http://localhost:4000)
 - **FastAPI Backend**: [http://localhost:8000](http://localhost:8000)
 - **Interactive OpenAPI / Swagger Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
 - **Health Diagnostics**: [http://localhost:8000/health](http://localhost:8000/health)

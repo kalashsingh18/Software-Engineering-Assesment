@@ -98,7 +98,7 @@ services:
     depends_on:
       - api
     ports:
-      - "3000:80"
+      - "4000:80"
 
 volumes:
   postgres_data:

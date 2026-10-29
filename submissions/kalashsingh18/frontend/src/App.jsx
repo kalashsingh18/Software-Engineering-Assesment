@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  FileText, Upload, Trash2, CheckCircle2, Clock, AlertCircle, 
-  Send, RefreshCw, LogOut, ShieldCheck, Sparkles, Database, 
-  Layers, ExternalLink, HelpCircle, Copy, Check, MessageSquare, 
+import {
+  FileText, Upload, Trash2, CheckCircle2, Clock, AlertCircle,
+  Send, RefreshCw, LogOut, ShieldCheck, Sparkles, Database,
+  Layers, ExternalLink, HelpCircle, Copy, Check, MessageSquare,
   Zap, ArrowRight, CornerDownLeft, SlidersHorizontal, BookOpen
 } from 'lucide-react';
 
@@ -56,7 +56,7 @@ export default function App() {
 
     const interval = setInterval(() => {
       fetchDocuments();
-    }, 3000);
+    }, 4000);
 
     return () => clearInterval(interval);
   }, [documents, token]);
@@ -126,8 +126,8 @@ export default function App() {
     setAuthLoading(true);
 
     const endpoint = authMode === 'signup' ? `${API_BASE}/auth/signup` : `${API_BASE}/auth/login`;
-    const payload = authMode === 'signup' 
-      ? authForm 
+    const payload = authMode === 'signup'
+      ? authForm
       : { username_or_email: authForm.username || authForm.email, password: authForm.password };
 
     try {
@@ -204,7 +204,7 @@ export default function App() {
   };
 
   const toggleSelectDoc = (id) => {
-    setSelectedDocIds(prev => 
+    setSelectedDocIds(prev =>
       prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
     );
   };
@@ -396,13 +396,13 @@ export default function App() {
             </div>
 
             <div className="auth-tabs">
-              <button 
+              <button
                 className={`auth-tab ${authMode === 'login' ? 'active' : ''}`}
                 onClick={() => setAuthMode('login')}
               >
                 Sign In
               </button>
-              <button 
+              <button
                 className={`auth-tab ${authMode === 'signup' ? 'active' : ''}`}
                 onClick={() => setAuthMode('signup')}
               >
@@ -420,10 +420,10 @@ export default function App() {
               {authMode === 'signup' && (
                 <div className="form-group">
                   <label className="form-label">Email Address</label>
-                  <input 
-                    type="email" 
-                    className="form-input" 
-                    required 
+                  <input
+                    type="email"
+                    className="form-input"
+                    required
                     value={authForm.email}
                     onChange={e => setAuthForm({ ...authForm, email: e.target.value })}
                     placeholder="name@company.com"
@@ -433,10 +433,10 @@ export default function App() {
 
               <div className="form-group">
                 <label className="form-label">{authMode === 'signup' ? 'Username' : 'Username or Email'}</label>
-                <input 
-                  type="text" 
-                  className="form-input" 
-                  required 
+                <input
+                  type="text"
+                  className="form-input"
+                  required
                   value={authForm.username}
                   onChange={e => setAuthForm({ ...authForm, username: e.target.value })}
                   placeholder="Enter your username"
@@ -445,20 +445,20 @@ export default function App() {
 
               <div className="form-group">
                 <label className="form-label">Password</label>
-                <input 
-                  type="password" 
-                  className="form-input" 
-                  required 
+                <input
+                  type="password"
+                  className="form-input"
+                  required
                   value={authForm.password}
                   onChange={e => setAuthForm({ ...authForm, password: e.target.value })}
                   placeholder="••••••••"
                 />
               </div>
 
-              <button 
-                type="submit" 
-                className="btn-send" 
-                style={{ width: '100%', height: '46px', justifyContent: 'center', marginTop: '12px' }} 
+              <button
+                type="submit"
+                className="btn-send"
+                style={{ width: '100%', height: '46px', justifyContent: 'center', marginTop: '12px' }}
                 disabled={authLoading}
               >
                 {authLoading ? 'Verifying...' : (authMode === 'signup' ? 'Create Account' : 'Sign In')}
@@ -477,9 +477,9 @@ export default function App() {
                 <span>Knowledge Base</span>
                 <span className="panel-badge">{documents.length}</span>
               </div>
-              <button 
-                onClick={fetchDocuments} 
-                className="btn-action-icon" 
+              <button
+                onClick={fetchDocuments}
+                className="btn-action-icon"
                 title="Refresh Documents"
               >
                 <RefreshCw size={15} />
@@ -487,13 +487,13 @@ export default function App() {
             </div>
 
             {/* Drag & Drop Upload Zone */}
-            <div 
+            <div
               className="upload-card"
               onClick={() => fileInputRef.current?.click()}
             >
-              <input 
-                type="file" 
-                ref={fileInputRef} 
+              <input
+                type="file"
+                ref={fileInputRef}
                 style={{ display: 'none' }}
                 accept=".pdf,.txt,.md"
                 onChange={handleUpload}
@@ -536,8 +536,8 @@ export default function App() {
                   const isSelected = selectedDocIds.includes(doc.id);
                   const ext = doc.filename.split('.').pop()?.toUpperCase() || 'DOC';
                   return (
-                    <div 
-                      key={doc.id} 
+                    <div
+                      key={doc.id}
                       className={`doc-item ${isSelected ? 'selected' : ''}`}
                       onClick={() => toggleSelectDoc(doc.id)}
                       title="Click to toggle filter for questions"
@@ -553,7 +553,7 @@ export default function App() {
                           </div>
                         </div>
                       </div>
-                      <button 
+                      <button
                         onClick={(e) => handleDeleteDoc(doc.id, e)}
                         className="btn-action-icon"
                         title="Delete document and purge embeddings"
@@ -576,7 +576,7 @@ export default function App() {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 {chatHistory.length > 0 && (
-                  <button 
+                  <button
                     onClick={() => setChatHistory([])}
                     style={{ background: 'transparent', border: 'none', color: '#94a3b8', fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
                   >
@@ -591,13 +591,13 @@ export default function App() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <SlidersHorizontal size={14} />
                 <span>
-                  {selectedDocIds.length > 0 
-                    ? `Searching across ${selectedDocIds.length} selected document(s)` 
+                  {selectedDocIds.length > 0
+                    ? `Searching across ${selectedDocIds.length} selected document(s)`
                     : `Searching across all ready documents (${documents.filter(d => d.status === 'ready').length} indexed)`}
                 </span>
               </div>
               {selectedDocIds.length > 0 && (
-                <button 
+                <button
                   onClick={() => setSelectedDocIds([])}
                   style={{ background: 'transparent', border: 'none', color: '#67e8f9', cursor: 'pointer', fontSize: '0.75rem', textDecoration: 'underline' }}
                 >
@@ -624,22 +624,22 @@ export default function App() {
                     <div style={{ fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.5px' }}>
                       Suggested Questions
                     </div>
-                    <div 
-                      className="suggestion-chip" 
+                    <div
+                      className="suggestion-chip"
                       onClick={() => sendQuery("How many days of paid annual vacation leave do employees get?")}
                     >
                       <span>🌴 How many days of annual vacation leave do employees get?</span>
                       <CornerDownLeft size={14} color="#818cf8" />
                     </div>
-                    <div 
-                      className="suggestion-chip" 
+                    <div
+                      className="suggestion-chip"
                       onClick={() => sendQuery("What is the home office setup stipend and monthly internet reimbursement?")}
                     >
                       <span>💻 What is the home office setup stipend and monthly internet allowance?</span>
                       <CornerDownLeft size={14} color="#818cf8" />
                     </div>
-                    <div 
-                      className="suggestion-chip" 
+                    <div
+                      className="suggestion-chip"
                       onClick={() => sendQuery("What are core collaboration hours across engineering teams?")}
                     >
                       <span>⏰ What are core collaboration hours across engineering teams?</span>
@@ -662,7 +662,7 @@ export default function App() {
                           <Sparkles size={16} />
                           <span>DocuMind Synthesis</span>
                         </div>
-                        <button 
+                        <button
                           onClick={() => copyToClipboard(item.answer, idx)}
                           className="btn-copy"
                           title="Copy Answer"
@@ -726,7 +726,7 @@ export default function App() {
             {/* Bottom Question Input */}
             <form onSubmit={handleAsk} className="chat-input-bar">
               <div className="chat-input-wrapper">
-                <input 
+                <input
                   type="text"
                   className="chat-input"
                   placeholder="Ask a question grounded in your documents..."
@@ -735,9 +735,9 @@ export default function App() {
                   disabled={asking}
                 />
               </div>
-              <button 
-                type="submit" 
-                className="btn-send" 
+              <button
+                type="submit"
+                className="btn-send"
                 disabled={asking || !question.trim()}
               >
                 {asking ? <RefreshCw size={16} className="spin" /> : <Send size={16} />}
