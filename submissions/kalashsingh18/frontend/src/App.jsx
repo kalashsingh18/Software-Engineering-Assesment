@@ -509,6 +509,15 @@ export default function App() {
       );
     }
 
+    // If out-of-scope / unrelated message
+    if (text.includes("not related to your uploaded documents")) {
+      return (
+        <div className="answer-body refusal-alert" style={{ borderColor: 'rgba(234, 179, 8, 0.4)', background: 'rgba(234, 179, 8, 0.08)' }}>
+          ℹ️ <strong>Out of Scope:</strong> {text}
+        </div>
+      );
+    }
+
     const lines = text.split('\n');
     return (
       <div className="answer-body">

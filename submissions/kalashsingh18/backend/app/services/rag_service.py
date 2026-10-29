@@ -6,14 +6,15 @@ from app.models.query_log import QueryLog
 from app.models.chunk import DocumentChunk
 from app.models.document import Document
 from app.utils.embeddings import get_query_embedding
-from app.rag.generator import generate_grounded_answer, REFUSAL_MESSAGE
+from app.rag.generator import generate_grounded_answer, REFUSAL_MESSAGE, OUT_OF_CONTEXT_MESSAGE
 
 
 def answer_question(
     db: Session,
     user_id: uuid.UUID,
     question: str,
-    document_ids: Optional[List[uuid.UUID]] = None
+    document_ids: Optional[List[uuid.UUID]] = None,
+    chat_history: Optional[List[Dict[str, str]]] = None
 ) -> Dict[str, Any]:
    
     start_time = time.time()
@@ -50,10 +51,10 @@ def answer_question(
         for chunk, doc_name in results
     ]
 
-    answer, usage = generate_grounded_answer(question, retrieved_chunks)
+    answer, usage = generate_grounded_answer(question, retrieved_chunks, chat_history=chat_history)
 
     citations = []
-    is_refusal = (answer.strip() == REFUSAL_MESSAGE)
+    is_refusal = (answer.strip() in (REFUSAL_MESSAGE, OUT_OF_CONTEXT_MESSAGE))
 
     if not is_refusal and retrieved_chunks:
         citations = [

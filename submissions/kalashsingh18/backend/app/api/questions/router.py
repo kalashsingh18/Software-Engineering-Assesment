@@ -11,6 +11,7 @@ from app.api.questions.schemas import (
     QuestionResponse,
     QueryLogResponse
 )
+from app.services.rag_service import answer_question, get_user_query_history
 
 router = APIRouter(prefix="/questions", tags=["Questions & RAG"])
 
@@ -24,11 +25,16 @@ def ask(
    
     check_rate_limit(str(current_user.id))
 
+    history = None
+    if data.chat_history:
+        history = [{"role": t.role, "content": t.content} for t in data.chat_history]
+
     return answer_question(
         db=db,
         user_id=current_user.id,
         question=data.question,
-        document_ids=data.document_ids
+        document_ids=data.document_ids,
+        chat_history=history
     )
 
 

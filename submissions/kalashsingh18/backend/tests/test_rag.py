@@ -96,3 +96,36 @@ def test_unanswerable_question_refusal(client, db, user_a, auth_headers_user_a):
         assert data["answer"] == "I could not find an answer in your uploaded documents."
         assert data["grounded"] is False
         assert len(data["citations"]) == 0
+
+
+def test_out_of_context_question_refusal(client, db, user_a, auth_headers_user_a):
+    """
+    Verifies that questions unrelated to uploaded documents or history
+    receive the OUT_OF_CONTEXT_MESSAGE with grounded=False.
+    """
+    from app.rag.generator import OUT_OF_CONTEXT_MESSAGE
+
+    with patch("app.services.rag_service.generate_grounded_answer") as mock_generate:
+        mock_generate.return_value = (
+            OUT_OF_CONTEXT_MESSAGE,
+            {
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "latency_ms": 10.0,
+                "estimated_cost_usd": 0.0
+            }
+        )
+
+        res = client.post(
+            "/api/v1/questions/ask",
+            headers=auth_headers_user_a,
+            json={"question": "What is the capital of France?"}
+        )
+
+        assert res.status_code == 200
+        data = res.json()
+        assert data["answer"] == OUT_OF_CONTEXT_MESSAGE
+        assert data["grounded"] is False
+        assert len(data["citations"]) == 0
+
