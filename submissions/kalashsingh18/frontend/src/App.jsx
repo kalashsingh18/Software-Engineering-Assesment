@@ -234,6 +234,15 @@ export default function App() {
     setChatHistory(prev => [...prev, tempQ]);
 
     try {
+      // Build conversation history from the last 5 completed turns
+      const recentHistory = [];
+      const completedTurns = chatHistory.filter(t => t.answer && !t.loading && !t.streaming);
+      const turnsToSend = completedTurns.slice(-5);
+      for (const turn of turnsToSend) {
+        recentHistory.push({ role: 'user', content: turn.question });
+        recentHistory.push({ role: 'assistant', content: turn.answer });
+      }
+
       const res = await fetch(`${API_BASE}/questions/stream`, {
         method: 'POST',
         headers: {
@@ -242,7 +251,8 @@ export default function App() {
         },
         body: JSON.stringify({
           question: queryText,
-          document_ids: selectedDocIds.length > 0 ? selectedDocIds : null
+          document_ids: selectedDocIds.length > 0 ? selectedDocIds : null,
+          chat_history: recentHistory.length > 0 ? recentHistory : null
         })
       });
 

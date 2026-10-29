@@ -55,8 +55,13 @@ def stream_ask(
         document_ids=data.document_ids
     )
 
+    # Convert chat history to plain dicts for the generator
+    history = None
+    if data.chat_history:
+        history = [{"role": t.role, "content": t.content} for t in data.chat_history]
+
     return StreamingResponse(
-        stream_grounded_answer(data.question, retrieved),
+        stream_grounded_answer(data.question, retrieved, chat_history=history),
         media_type="text/event-stream"
     )
 

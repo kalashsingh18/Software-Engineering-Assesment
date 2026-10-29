@@ -1,7 +1,7 @@
 import time
 import logging
 import httpx
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Optional, Tuple
 from tenacity import retry, stop_after_attempt, wait_exponential
 from app.config import settings
 
@@ -48,6 +48,14 @@ def _format_context(chunks: List[Dict[str, Any]]) -> str:
     return "\n\n".join(formatted)
 
 
+def _build_history_messages(chat_history: Optional[List[Dict[str, str]]] = None, max_turns: int = 5) -> List[Dict[str, str]]:
+    """Convert recent chat turns into OpenAI-style messages."""
+    if not chat_history:
+        return []
+    recent = chat_history[-max_turns:]
+    return [{"role": turn["role"], "content": turn["content"]} for turn in recent]
+
+
 @retry(
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=1, max=10),
@@ -55,7 +63,8 @@ def _format_context(chunks: List[Dict[str, Any]]) -> str:
 )
 def generate_grounded_answer(
     question: str,
-    retrieved_chunks: List[Dict[str, Any]]
+    retrieved_chunks: List[Dict[str, Any]],
+    chat_history: Optional[List[Dict[str, str]]] = None
 ) -> Tuple[str, Dict[str, Any]]:
 
     start_time = time.time()
@@ -100,12 +109,14 @@ Please answer the user question strictly using the reference passages above. If 
                 "Authorization": f"Bearer {settings.GROQ_API_KEY}",
                 "Content-Type": "application/json"
             }
+            history_msgs = _build_history_messages(chat_history)
+            messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+            messages.extend(history_msgs)
+            messages.append({"role": "user", "content": user_prompt})
+
             payload = {
                 "model": settings.GROQ_MODEL,
-                "messages": [
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_prompt}
-                ],
+                "messages": messages,
                 "temperature": 0.1,
                 "max_tokens": 1024
             }
@@ -205,7 +216,8 @@ Please answer the user question strictly using the reference passages above. If 
 
 def stream_grounded_answer(
     question: str,
-    retrieved_chunks: List[Dict[str, Any]]
+    retrieved_chunks: List[Dict[str, Any]],
+    chat_history: Optional[List[Dict[str, str]]] = None
 ):
     """
     Generator yielding Server-Sent Events (SSE) chunks:
@@ -247,12 +259,14 @@ Provide your grounded answer with citations [DocumentName, Page X]. If the answe
                 "Authorization": f"Bearer {settings.GROQ_API_KEY}",
                 "Content-Type": "application/json"
             }
+            history_msgs = _build_history_messages(chat_history)
+            messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+            messages.extend(history_msgs)
+            messages.append({"role": "user", "content": user_prompt})
+
             payload = {
                 "model": settings.GROQ_MODEL,
-                "messages": [
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_prompt}
-                ],
+                "messages": messages,
                 "temperature": 0.1,
                 "max_tokens": 1024,
                 "stream": True
@@ -281,7 +295,7 @@ Provide your grounded answer with citations [DocumentName, Page X]. If the answe
             logger.error(f"Streaming Groq call failed: {e}. Falling back to non-streaming.")
 
     # Fallback to standard generator
-    answer, usage = generate_grounded_answer(question, retrieved_chunks)
+    answer, usage = generate_grounded_answer(question, retrieved_chunks, chat_history)
     yield f"data: {json.dumps({'type': 'token', 'token': answer})}\n\n"
     yield f"data: {json.dumps({'type': 'done', 'citations': [{'document_name': c['document_name'], 'page_number': c['page_number'], 'passage_excerpt': c['content'][:250]} for c in retrieved_chunks], 'usage': usage})}\n\n"
 

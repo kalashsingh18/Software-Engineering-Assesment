@@ -4,9 +4,15 @@ from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 
 
+class ChatTurn(BaseModel):
+    role: str = Field(..., pattern="^(user|assistant)$")
+    content: str
+
+
 class QuestionRequest(BaseModel):
     question: str = Field(..., min_length=2, max_length=1000)
     document_ids: Optional[List[uuid.UUID]] = None
+    chat_history: Optional[List[ChatTurn]] = None
 
 
 class CitationItem(BaseModel):
