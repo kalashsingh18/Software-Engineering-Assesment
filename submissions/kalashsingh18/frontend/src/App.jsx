@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   FileText, Upload, Trash2, CheckCircle2, Clock, AlertCircle,
   Send, RefreshCw, LogOut, ShieldCheck, Sparkles, Database,
   Layers, ExternalLink, HelpCircle, Copy, Check, MessageSquare,
-  Zap, ArrowRight, CornerDownLeft, SlidersHorizontal, BookOpen
+  Zap, ArrowRight, CornerDownLeft, SlidersHorizontal, BookOpen,
+  Search, X, FileUp, Lightbulb
 } from 'lucide-react';
 
 const API_BASE = '/api/v1';
@@ -19,16 +20,28 @@ export default function App() {
   const [documents, setDocuments] = useState([]);
   const [selectedDocIds, setSelectedDocIds] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState([]);
   const [uploadError, setUploadError] = useState('');
+  const [dragOver, setDragOver] = useState(false);
 
   const [chatHistory, setChatHistory] = useState([]);
   const [question, setQuestion] = useState('');
   const [asking, setAsking] = useState(false);
   const [healthStatus, setHealthStatus] = useState('healthy');
   const [copiedIdx, setCopiedIdx] = useState(null);
+  const [followUpSuggestions, setFollowUpSuggestions] = useState([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+
+  // Semantic search
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const searchTimeoutRef = useRef(null);
 
   const fileInputRef = useRef(null);
   const chatEndRef = useRef(null);
+  const dropZoneRef = useRef(null);
 
   useEffect(() => {
     fetch('/health')
@@ -156,15 +169,16 @@ export default function App() {
     setUser(null);
   };
 
-  const handleUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setUploading(true);
-    setUploadError('');
-
+  // Multi-file upload handler
+  const uploadSingleFile = async (file, idx, totalFiles) => {
     const formData = new FormData();
     formData.append('file', file);
+
+    setUploadProgress(prev => {
+      const updated = [...prev];
+      updated[idx] = { name: file.name, status: 'uploading', progress: 0 };
+      return updated;
+    });
 
     try {
       const res = await fetch(`${API_BASE}/documents/upload`, {
@@ -176,12 +190,126 @@ export default function App() {
       if (!res.ok) {
         throw new Error(data.detail || 'Upload failed');
       }
-      fetchDocuments();
+      setUploadProgress(prev => {
+        const updated = [...prev];
+        updated[idx] = { name: file.name, status: 'done', progress: 100 };
+        return updated;
+      });
     } catch (err) {
-      setUploadError(err.message);
+      setUploadProgress(prev => {
+        const updated = [...prev];
+        updated[idx] = { name: file.name, status: 'error', progress: 0, error: err.message };
+        return updated;
+      });
+    }
+  };
+
+  const handleMultiUpload = async (files) => {
+    if (!files || files.length === 0) return;
+
+    const validFiles = Array.from(files).filter(f => {
+      const ext = f.name.split('.').pop()?.toLowerCase();
+      return ['pdf', 'txt', 'md'].includes(ext);
+    });
+
+    if (validFiles.length === 0) {
+      setUploadError('Only PDF, TXT, and MD files are supported.');
+      return;
+    }
+
+    setUploading(true);
+    setUploadError('');
+    setUploadProgress(validFiles.map(f => ({ name: f.name, status: 'pending', progress: 0 })));
+
+    // Upload all files concurrently
+    await Promise.all(validFiles.map((file, idx) => uploadSingleFile(file, idx, validFiles.length)));
+
+    fetchDocuments();
+    setUploading(false);
+    // Clear progress after 3 seconds
+    setTimeout(() => setUploadProgress([]), 3000);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleUpload = async (e) => {
+    const files = e.target.files;
+    await handleMultiUpload(files);
+  };
+
+  // Drag and drop handlers
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback(async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+    await handleMultiUpload(e.dataTransfer.files);
+  }, [token]);
+
+  // Semantic search with debounce
+  const performSearch = async (query) => {
+    if (!query.trim() || query.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    setSearching(true);
+    try {
+      const res = await fetch(`${API_BASE}/documents/search`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ query })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSearchResults(data.results || []);
+      }
+    } catch (err) {
+      console.error('Search failed', err);
     } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      setSearching(false);
+    }
+  };
+
+  const handleSearchInput = (val) => {
+    setSearchQuery(val);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    searchTimeoutRef.current = setTimeout(() => performSearch(val), 400);
+  };
+
+  // Fetch follow-up suggestions
+  const fetchSuggestions = async (q, a) => {
+    if (!a || a.includes('could not find an answer')) return;
+    setLoadingSuggestions(true);
+    try {
+      const res = await fetch(`${API_BASE}/questions/suggestions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ question: q, answer: a })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setFollowUpSuggestions(data.suggestions || []);
+      }
+    } catch (err) {
+      console.error('Suggestions failed', err);
+    } finally {
+      setLoadingSuggestions(false);
     }
   };
 
@@ -222,6 +350,7 @@ export default function App() {
 
     setAsking(true);
     setQuestion('');
+    setFollowUpSuggestions([]);
 
     const tempQ = {
       question: queryText,
@@ -232,6 +361,8 @@ export default function App() {
       streaming: true
     };
     setChatHistory(prev => [...prev, tempQ]);
+
+    let finalAnswer = '';
 
     try {
       // Build conversation history from the last 5 completed turns
@@ -290,6 +421,7 @@ export default function App() {
                   return updated;
                 });
               } else if (event.type === 'done') {
+                finalAnswer = streamedAnswer;
                 setChatHistory(prev => {
                   const updated = [...prev];
                   const last = updated[updated.length - 1];
@@ -307,6 +439,11 @@ export default function App() {
             }
           }
         }
+      }
+
+      // Fetch follow-up suggestions after answer is complete
+      if (finalAnswer) {
+        fetchSuggestions(queryText, finalAnswer);
       }
     } catch (err) {
       setChatHistory(prev => [

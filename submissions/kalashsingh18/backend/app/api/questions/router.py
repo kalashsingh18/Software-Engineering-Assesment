@@ -5,7 +5,7 @@ from app.database import get_db
 from app.models.user import User
 from app.utils.security import get_current_user
 from app.utils.rate_limiter import check_rate_limit
-from app.services.rag_service import answer_question, get_user_query_history
+from tenacity import retry, stop_after_attempt, wait_exponential
 from app.api.questions.schemas import (
     QuestionRequest,
     QuestionResponse,
@@ -72,3 +72,63 @@ def get_history(
     db: Session = Depends(get_db)
 ):
     return get_user_query_history(db, current_user.id)
+
+
+@router.post("/suggestions")
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+def get_followup_suggestions(
+    data: dict,
+    current_user: User = Depends(get_current_user),
+):
+    """Generate 3 smart follow-up questions based on the last Q&A turn."""
+    import json
+    import httpx
+    from app.config import settings
+
+    question = data.get("question", "")
+    answer = data.get("answer", "")
+
+    if not question or not answer:
+        return {"suggestions": []}
+
+    prompt = f"""Based on this Q&A exchange, generate exactly 3 short, specific follow-up questions the user might want to ask next. Return ONLY a JSON array of 3 strings, nothing else.
+
+Question: {question[:500]}
+Answer: {answer[:800]}
+
+Return format: ["question 1", "question 2", "question 3"]"""
+
+    if settings.LLM_PROVIDER == "groq" and settings.GROQ_API_KEY:
+        try:
+            url = f"{settings.GROQ_API_BASE.rstrip('/')}/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {settings.GROQ_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "model": settings.GROQ_MODEL,
+                "messages": [
+                    {"role": "system", "content": "You generate follow-up questions. Return ONLY a JSON array of 3 strings."},
+                    {"role": "user", "content": prompt}
+                ],
+                "temperature": 0.7,
+                "max_tokens": 256
+            }
+            with httpx.Client(timeout=10.0) as client:
+                resp = client.post(url, headers=headers, json=payload)
+                resp.raise_for_status()
+                text = resp.json()["choices"][0]["message"]["content"].strip()
+                # Parse the JSON array from the response
+                suggestions = json.loads(text)
+                if isinstance(suggestions, list) and len(suggestions) >= 3:
+                    return {"suggestions": suggestions[:3]}
+        except Exception:
+            pass
+
+    # Fallback: generate simple rule-based suggestions
+    return {"suggestions": [
+        f"Can you explain more about {question.split()[-2] if len(question.split()) > 2 else 'this'}?",
+        "What are the key details I should know?",
+        "Are there any exceptions or special cases?"
+    ]}
+

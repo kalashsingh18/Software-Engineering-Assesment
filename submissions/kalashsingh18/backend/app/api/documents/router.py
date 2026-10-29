@@ -63,3 +63,48 @@ def delete_document(
 ):
     delete_user_document(db, document_id, current_user.id)
     return {"message": "Document and all vector embeddings deleted successfully."}
+
+
+@router.post("/search")
+def semantic_search(
+    data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Semantic search across all user documents. Returns matching passages."""
+    from app.utils.embeddings import get_query_embedding
+    from app.rag.vector_store import search_similar_chunks
+
+    query_text = data.get("query", "").strip()
+    if not query_text or len(query_text) < 2:
+        return {"results": []}
+
+    query_vec = get_query_embedding(query_text)
+    results = search_similar_chunks(
+        db=db,
+        user_id=current_user.id,
+        query_vector=query_vec,
+        top_k=8
+    )
+
+    # Build response with keyword highlighting info
+    search_results = []
+    query_words = set(w.lower() for w in query_text.split() if len(w) > 2)
+    for chunk in results:
+        content = chunk["content"]
+        # Calculate a simple relevance score based on keyword overlap
+        content_lower = content.lower()
+        matched_words = [w for w in query_words if w in content_lower]
+        relevance = len(matched_words) / max(len(query_words), 1)
+
+        search_results.append({
+            "document_id": str(chunk["document_id"]),
+            "document_name": chunk["document_name"],
+            "page_number": chunk["page_number"],
+            "passage": content[:400],
+            "relevance_score": round(relevance, 2),
+            "matched_keywords": matched_words
+        })
+
+    return {"results": search_results, "total": len(search_results)}
+
