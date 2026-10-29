@@ -81,12 +81,6 @@ def generate_grounded_answer(
             "latency_ms": round(latency_ms, 2),
             "estimated_cost_usd": 0.0
         }
-            "prompt_tokens": 0,
-            "completion_tokens": 0,
-            "total_tokens": 0,
-            "latency_ms": round(latency_ms, 2),
-            "estimated_cost_usd": 0.0
-        }
 
     context_str = _format_context(retrieved_chunks)
     user_prompt = f"""Here are the reference passages from the uploaded documents:
