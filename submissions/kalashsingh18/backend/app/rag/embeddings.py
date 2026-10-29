@@ -14,11 +14,9 @@ def _deterministic_mock_embedding(text: str, dim: int = 768) -> List[float]:
     vec = []
     for i in range(dim):
         byte_val = raw_hash[i % len(raw_hash)]
-        # Add index-dependent variation
         val = math.sin((byte_val + 1) * (i + 1))
         vec.append(val)
     
-    # Normalize to unit vector
     norm = math.sqrt(sum(x * x for x in vec)) or 1.0
     return [x / norm for x in vec]
 
@@ -29,11 +27,7 @@ def _deterministic_mock_embedding(text: str, dim: int = 768) -> List[float]:
     reraise=True
 )
 def get_embedding(text: str) -> List[float]:
-    """
-    Generates a semantic embedding vector for a given text snippet.
-    Uses Google Gemini embedding API if GEMINI_API_KEY is configured;
-    falls back gracefully to deterministic vectors if unconfigured or in mock mode.
-    """
+    
     if not text.strip():
         return [0.0] * settings.EMBEDDING_DIMENSION
 
@@ -58,7 +52,6 @@ def get_embedding(text: str) -> List[float]:
 
 
 def get_query_embedding(query: str) -> List[float]:
-    """Generates embedding specifically tailored for retrieval queries."""
     if settings.LLM_PROVIDER == "gemini" and settings.GEMINI_API_KEY:
         try:
             import google.generativeai as genai

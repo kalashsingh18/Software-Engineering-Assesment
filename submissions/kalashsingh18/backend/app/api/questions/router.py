@@ -45,7 +45,6 @@ def stream_ask(
 
     check_rate_limit(str(current_user.id))
 
-    # Retrieve vector matches
     query_vec = get_query_embedding(data.question)
     retrieved = search_similar_chunks(
         db=db,
@@ -55,7 +54,6 @@ def stream_ask(
         document_ids=data.document_ids
     )
 
-    # Convert chat history to plain dicts for the generator
     history = None
     if data.chat_history:
         history = [{"role": t.role, "content": t.content} for t in data.chat_history]
@@ -80,7 +78,6 @@ def get_followup_suggestions(
     data: dict,
     current_user: User = Depends(get_current_user),
 ):
-    """Generate 3 smart follow-up questions based on the last Q&A turn."""
     import json
     import httpx
     from app.config import settings
@@ -125,7 +122,6 @@ Return format: ["question 1", "question 2", "question 3"]"""
         except Exception:
             pass
 
-    # Fallback: generate simple rule-based suggestions
     return {"suggestions": [
         f"Can you explain more about {question.split()[-2] if len(question.split()) > 2 else 'this'}?",
         "What are the key details I should know?",

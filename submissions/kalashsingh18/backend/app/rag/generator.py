@@ -49,7 +49,6 @@ def _format_context(chunks: List[Dict[str, Any]]) -> str:
 
 
 def _build_history_messages(chat_history: Optional[List[Dict[str, str]]] = None, max_turns: int = 5) -> List[Dict[str, str]]:
-    """Convert recent chat turns into OpenAI-style messages."""
     if not chat_history:
         return []
     recent = chat_history[-max_turns:]
@@ -146,7 +145,6 @@ Please answer the user question strictly using the reference passages above. If 
         except Exception as e:
             logger.error(f"Groq generation failed: {e}. Falling back to rule-based fallback.")
 
-    # 2. Call Gemini API if configured
     if settings.LLM_PROVIDER == "gemini" and settings.GEMINI_API_KEY:
         try:
             import google.generativeai as genai
@@ -219,23 +217,17 @@ def stream_grounded_answer(
     retrieved_chunks: List[Dict[str, Any]],
     chat_history: Optional[List[Dict[str, str]]] = None
 ):
-    """
-    Generator yielding Server-Sent Events (SSE) chunks:
-    - data: {"type": "token", "token": "..."}
-    - data: {"type": "done", "citations": [...], "usage": {...}}
-    """
+
     import json
     start_time = time.time()
     clean_q = question.strip().lower().rstrip("?!.,")
 
-    # Check for friendly greeting
     if any(clean_q == g or clean_q.startswith(g + " ") for g in GREETING_WORDS):
         yield f"data: {json.dumps({'type': 'token', 'token': GREETING_RESPONSE})}\n\n"
         latency_ms = (time.time() - start_time) * 1000
         yield f"data: {json.dumps({'type': 'done', 'citations': [], 'usage': {'prompt_tokens': len(question) // 4, 'completion_tokens': len(GREETING_RESPONSE) // 4, 'total_tokens': (len(question) + len(GREETING_RESPONSE)) // 4, 'latency_ms': round(latency_ms, 2), 'estimated_cost_usd': 0.0}})}\n\n"
         return
 
-    # Refusal if no documents
     if not retrieved_chunks:
         yield f"data: {json.dumps({'type': 'token', 'token': REFUSAL_MESSAGE})}\n\n"
         latency_ms = (time.time() - start_time) * 1000

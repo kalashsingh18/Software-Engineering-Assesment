@@ -2,8 +2,6 @@ import sys
 from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool, text
 from alembic import context
-
-# Add current path
 sys.path.insert(0, ".")
 
 from app.config import settings

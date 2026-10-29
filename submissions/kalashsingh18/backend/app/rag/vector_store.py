@@ -17,7 +17,6 @@ def search_similar_chunks(
 ) -> List[Dict[str, Any]]:
 
     try:
-        # Base query joining Document to retrieve document metadata and status
         query = (
             db.query(DocumentChunk, Document.filename)
             .join(Document, DocumentChunk.document_id == Document.id)

@@ -71,7 +71,6 @@ def semantic_search(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Semantic search across all user documents. Returns matching passages."""
     from app.utils.embeddings import get_query_embedding
     from app.rag.vector_store import search_similar_chunks
 
@@ -87,12 +86,10 @@ def semantic_search(
         top_k=8
     )
 
-    # Build response with keyword highlighting info
     search_results = []
     query_words = set(w.lower() for w in query_text.split() if len(w) > 2)
     for chunk in results:
         content = chunk["content"]
-        # Calculate a simple relevance score based on keyword overlap
         content_lower = content.lower()
         matched_words = [w for w in query_words if w in content_lower]
         relevance = len(matched_words) / max(len(query_words), 1)
