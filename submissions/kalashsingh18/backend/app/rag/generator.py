@@ -201,3 +201,87 @@ Please answer the user question strictly using the reference passages above. If 
         "latency_ms": round(latency_ms, 2),
         "estimated_cost_usd": 0.0
     }
+
+
+def stream_grounded_answer(
+    question: str,
+    retrieved_chunks: List[Dict[str, Any]]
+):
+    """
+    Generator yielding Server-Sent Events (SSE) chunks:
+    - data: {"type": "token", "token": "..."}
+    - data: {"type": "done", "citations": [...], "usage": {...}}
+    """
+    import json
+    start_time = time.time()
+    clean_q = question.strip().lower().rstrip("?!.,")
+
+    # Check for friendly greeting
+    if any(clean_q == g or clean_q.startswith(g + " ") for g in GREETING_WORDS):
+        yield f"data: {json.dumps({'type': 'token', 'token': GREETING_RESPONSE})}\n\n"
+        latency_ms = (time.time() - start_time) * 1000
+        yield f"data: {json.dumps({'type': 'done', 'citations': [], 'usage': {'prompt_tokens': len(question) // 4, 'completion_tokens': len(GREETING_RESPONSE) // 4, 'total_tokens': (len(question) + len(GREETING_RESPONSE)) // 4, 'latency_ms': round(latency_ms, 2), 'estimated_cost_usd': 0.0}})}\n\n"
+        return
+
+    # Refusal if no documents
+    if not retrieved_chunks:
+        yield f"data: {json.dumps({'type': 'token', 'token': REFUSAL_MESSAGE})}\n\n"
+        latency_ms = (time.time() - start_time) * 1000
+        yield f"data: {json.dumps({'type': 'done', 'citations': [], 'usage': {'prompt_tokens': 0, 'completion_tokens': 0, 'total_tokens': 0, 'latency_ms': round(latency_ms, 2), 'estimated_cost_usd': 0.0}})}\n\n"
+        return
+
+    context_str = _format_context(retrieved_chunks)
+    user_prompt = f"""Here are the reference passages from the uploaded documents:
+
+{context_str}
+
+User Question: {question}
+
+Provide your grounded answer with citations [DocumentName, Page X]. If the answer is not contained in the passages, reply exactly with: "{REFUSAL_MESSAGE}"."""
+
+    # Stream from Groq if configured
+    if settings.LLM_PROVIDER == "groq" and settings.GROQ_API_KEY:
+        try:
+            url = f"{settings.GROQ_API_BASE.rstrip('/')}/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {settings.GROQ_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "model": settings.GROQ_MODEL,
+                "messages": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": user_prompt}
+                ],
+                "temperature": 0.1,
+                "max_tokens": 1024,
+                "stream": True
+            }
+
+            accumulated_text = ""
+            with httpx.Client(timeout=25.0) as client:
+                with client.stream("POST", url, headers=headers, json=payload) as response:
+                    response.raise_for_status()
+                    for line in response.iter_lines():
+                        if line.startswith("data: ") and line != "data: [DONE]":
+                            chunk_data = json.loads(line[6:])
+                            delta = chunk_data["choices"][0].get("delta", {}).get("content", "")
+                            if delta:
+                                accumulated_text += delta
+                                yield f"data: {json.dumps({'type': 'token', 'token': delta})}\n\n"
+
+            latency_ms = (time.time() - start_time) * 1000
+            prompt_tokens = len(user_prompt) // 4
+            comp_tokens = len(accumulated_text) // 4
+            cost = (prompt_tokens * 0.00000059) + (comp_tokens * 0.00000079)
+
+            yield f"data: {json.dumps({'type': 'done', 'citations': [{'document_name': c['document_name'], 'page_number': c['page_number'], 'passage_excerpt': c['content'][:250]} for c in retrieved_chunks], 'usage': {'prompt_tokens': prompt_tokens, 'completion_tokens': comp_tokens, 'total_tokens': prompt_tokens + comp_tokens, 'latency_ms': round(latency_ms, 2), 'estimated_cost_usd': round(cost, 6)}})}\n\n"
+            return
+        except Exception as e:
+            logger.error(f"Streaming Groq call failed: {e}. Falling back to non-streaming.")
+
+    # Fallback to standard generator
+    answer, usage = generate_grounded_answer(question, retrieved_chunks)
+    yield f"data: {json.dumps({'type': 'token', 'token': answer})}\n\n"
+    yield f"data: {json.dumps({'type': 'done', 'citations': [{'document_name': c['document_name'], 'page_number': c['page_number'], 'passage_excerpt': c['content'][:250]} for c in retrieved_chunks], 'usage': usage})}\n\n"
+

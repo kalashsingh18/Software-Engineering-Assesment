@@ -225,15 +225,16 @@ export default function App() {
 
     const tempQ = {
       question: queryText,
-      answer: 'Searching vector indices & synthesizing grounded response...',
+      answer: '',
       citations: [],
       usage: null,
-      loading: true
+      loading: true,
+      streaming: true
     };
     setChatHistory(prev => [...prev, tempQ]);
 
     try {
-      const res = await fetch(`${API_BASE}/questions/ask`, {
+      const res = await fetch(`${API_BASE}/questions/stream`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -244,21 +245,59 @@ export default function App() {
           document_ids: selectedDocIds.length > 0 ? selectedDocIds : null
         })
       });
-      const data = await res.json();
+
       if (!res.ok) {
-        throw new Error(data.detail || 'Failed to answer question');
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.detail || 'Streaming connection failed');
       }
 
-      setChatHistory(prev => [
-        ...prev.slice(0, -1),
-        {
-          question: data.question,
-          answer: data.answer,
-          citations: data.citations || [],
-          usage: data.usage,
-          grounded: data.grounded
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let streamedAnswer = '';
+      let buffer = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop(); // keep last incomplete line
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const event = JSON.parse(line.slice(6));
+              if (event.type === 'token') {
+                streamedAnswer += event.token;
+                setChatHistory(prev => {
+                  const updated = [...prev];
+                  const last = updated[updated.length - 1];
+                  if (last) {
+                    last.answer = streamedAnswer;
+                    last.loading = false;
+                  }
+                  return updated;
+                });
+              } else if (event.type === 'done') {
+                setChatHistory(prev => {
+                  const updated = [...prev];
+                  const last = updated[updated.length - 1];
+                  if (last) {
+                    last.citations = event.citations || [];
+                    last.usage = event.usage || null;
+                    last.streaming = false;
+                    last.loading = false;
+                  }
+                  return updated;
+                });
+              }
+            } catch (e) {
+              // Ignore partial JSON
+            }
+          }
         }
-      ]);
+      }
     } catch (err) {
       setChatHistory(prev => [
         ...prev.slice(0, -1),
@@ -267,7 +306,9 @@ export default function App() {
           answer: `Error: ${err.message}`,
           citations: [],
           usage: null,
-          grounded: false
+          grounded: false,
+          streaming: false,
+          loading: false
         }
       ]);
     } finally {
@@ -673,13 +714,16 @@ export default function App() {
                       </div>
 
                       {/* Answer Content */}
-                      {item.loading ? (
+                      {item.loading && !item.answer ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8', padding: '12px 0' }}>
                           <RefreshCw size={18} className="spin" color="#06b6d4" />
-                          <span>{item.answer}</span>
+                          <span>Searching knowledge base & synthesizing response...</span>
                         </div>
                       ) : (
-                        renderFormattedAnswer(item.answer)
+                        <div className="streamed-answer-box">
+                          {renderFormattedAnswer(item.answer)}
+                          {item.streaming && <span className="streaming-cursor">▍</span>}
+                        </div>
                       )}
 
                       {/* Source Citations */}

@@ -1014,3 +1014,17 @@ body {
   border-color: var(--primary);
   color: #ffffff;
 }
+
+/* Streaming Typing Cursor Animation */
+.streaming-cursor {
+  display: inline-block;
+  margin-left: 3px;
+  color: #06b6d4;
+  font-weight: 700;
+  animation: cursorBlink 0.8s infinite;
+}
+
+@keyframes cursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
