@@ -56,7 +56,7 @@ def stream_ask(
         db=db,
         user_id=current_user.id,
         query_vector=query_vec,
-        top_k=3,
+        top_k=6,
         document_ids=data.document_ids
     )
 
@@ -121,7 +121,6 @@ Return format: ["question 1", "question 2", "question 3"]"""
                 resp = client.post(url, headers=headers, json=payload)
                 resp.raise_for_status()
                 text = resp.json()["choices"][0]["message"]["content"].strip()
-                # Parse the JSON array from the response
                 suggestions = json.loads(text)
                 if isinstance(suggestions, list) and len(suggestions) >= 3:
                     return {"suggestions": suggestions[:3]}

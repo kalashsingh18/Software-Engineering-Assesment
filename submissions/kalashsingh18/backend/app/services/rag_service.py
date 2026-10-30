@@ -36,9 +36,9 @@ def answer_question(
 
     bind = db.get_bind()
     if bind.dialect.name == "postgresql":
-        results = query.order_by(DocumentChunk.embedding.cosine_distance(query_vector)).limit(5).all()
+        results = query.order_by(DocumentChunk.embedding.cosine_distance(query_vector)).limit(6).all()
     else:
-        results = query.limit(5).all()
+        results = query.limit(6).all()
 
     retrieved_chunks = [
         {

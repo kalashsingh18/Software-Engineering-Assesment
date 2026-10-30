@@ -129,3 +129,48 @@ def test_out_of_context_question_refusal(client, db, user_a, auth_headers_user_a
         assert data["grounded"] is False
         assert len(data["citations"]) == 0
 
+
+def test_general_query_document_comparison():
+    """
+    Verifies that general or comparative queries synthesize across retrieved chunks
+    and compare with the document rather than refusing.
+    """
+    from app.rag.generator import generate_grounded_answer, REFUSAL_MESSAGE, OUT_OF_CONTEXT_MESSAGE
+
+    chunks = [
+        {
+            "chunk_id": uuid.uuid4(),
+            "document_id": uuid.uuid4(),
+            "document_name": "leave_policy.pdf",
+            "page_number": 1,
+            "content": "Employees get 25 days paid vacation leave annually."
+        },
+        {
+            "chunk_id": uuid.uuid4(),
+            "document_id": uuid.uuid4(),
+            "document_name": "contractor_policy.pdf",
+            "page_number": 2,
+            "content": "Contractors are not eligible for paid vacation leave."
+        }
+    ]
+
+    # Test comparative query
+    ans, usage = generate_grounded_answer(
+        question="What is the difference between the leave policy and contractor policy?",
+        retrieved_chunks=chunks
+    )
+    assert ans != REFUSAL_MESSAGE
+    assert ans != OUT_OF_CONTEXT_MESSAGE
+    assert "leave_policy.pdf" in ans or "contractor_policy.pdf" in ans
+
+    # Test general query comparing with document
+    general_chunks = [chunks[0]]
+    ans2, usage2 = generate_grounded_answer(
+        question="What is the general concept of annual leave and what does the document say?",
+        retrieved_chunks=general_chunks
+    )
+    assert ans2 != REFUSAL_MESSAGE
+    assert ans2 != OUT_OF_CONTEXT_MESSAGE
+    assert "leave_policy.pdf" in ans2
+
+

@@ -4,7 +4,7 @@ import {
   Send, RefreshCw, LogOut, ShieldCheck, Sparkles, Database,
   Layers, ExternalLink, HelpCircle, Copy, Check, MessageSquare,
   Zap, ArrowRight, CornerDownLeft, SlidersHorizontal, BookOpen,
-  Search, X, FileUp, Lightbulb
+  Search, X, FileUp, Lightbulb, Eye, EyeOff, Bot, User as UserIcon
 } from 'lucide-react';
 
 const API_BASE = '/api/v1';
@@ -16,6 +16,9 @@ export default function App() {
   const [authForm, setAuthForm] = useState({ email: '', username: '', password: '' });
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [authTouched, setAuthTouched] = useState({ email: false, username: false, password: false });
+  const [fieldErrors, setFieldErrors] = useState({ email: '', username: '', password: '' });
 
   const [documents, setDocuments] = useState([]);
   const [selectedDocIds, setSelectedDocIds] = useState([]);
@@ -133,9 +136,91 @@ export default function App() {
     }
   };
 
+  const validateField = (field, value, mode = authMode) => {
+    let error = '';
+    const val = (value || '').trim();
+
+    if (field === 'email' && mode === 'signup') {
+      if (!val) {
+        error = 'Email address is required';
+      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
+        error = 'Please enter a valid email address (e.g. name@company.com)';
+      }
+    } else if (field === 'username') {
+      if (!val) {
+        error = mode === 'signup' ? 'Username is required' : 'Username or email is required';
+      } else if (mode === 'signup') {
+        if (val.length < 3) {
+          error = 'Username must be at least 3 characters';
+        } else if (val.length > 50) {
+          error = 'Username cannot exceed 50 characters';
+        } else if (!/^[a-zA-Z0-9_]+$/.test(val)) {
+          error = 'Only letters, numbers, and underscores allowed';
+        }
+      }
+    } else if (field === 'password') {
+      if (!val) {
+        error = 'Password is required';
+      } else if (mode === 'signup' && val.length < 6) {
+        error = 'Password must be at least 6 characters long';
+      }
+    }
+    return error;
+  };
+
+  const handleFieldChange = (field, value) => {
+    setAuthForm(prev => ({ ...prev, [field]: value }));
+    if (authTouched[field]) {
+      const err = validateField(field, value, authMode);
+      setFieldErrors(prev => ({ ...prev, [field]: err }));
+    }
+    if (authError) setAuthError('');
+  };
+
+  const handleFieldBlur = (field) => {
+    setAuthTouched(prev => ({ ...prev, [field]: true }));
+    const err = validateField(field, authForm[field], authMode);
+    setFieldErrors(prev => ({ ...prev, [field]: err }));
+  };
+
+  const handleSwitchAuthMode = (mode) => {
+    setAuthMode(mode);
+    setAuthError('');
+    setFieldErrors({ email: '', username: '', password: '' });
+    setAuthTouched({ email: false, username: false, password: false });
+  };
+
+  const getPasswordStrength = (pass) => {
+    if (!pass) return { score: 0, label: '', color: '#64748b' };
+    let score = 0;
+    if (pass.length >= 6) score += 1;
+    if (pass.length >= 8) score += 1;
+    if (/[A-Z]/.test(pass) && /[0-9]/.test(pass)) score += 1;
+    if (/[^A-Za-z0-9]/.test(pass)) score += 1;
+
+    if (score <= 1) return { score: 1, label: 'Weak', color: '#f43f5e' };
+    if (score === 2) return { score: 2, label: 'Fair', color: '#f59e0b' };
+    if (score >= 3) return { score: 3, label: 'Strong', color: '#10b981' };
+    return { score: 1, label: 'Weak', color: '#f43f5e' };
+  };
+
   const handleAuth = async (e) => {
     e.preventDefault();
     setAuthError('');
+
+    const newErrors = {
+      email: authMode === 'signup' ? validateField('email', authForm.email, 'signup') : '',
+      username: validateField('username', authForm.username, authMode),
+      password: validateField('password', authForm.password, authMode)
+    };
+
+    setAuthTouched({ email: true, username: true, password: true });
+    setFieldErrors(newErrors);
+
+    if (newErrors.email || newErrors.username || newErrors.password) {
+      return;
+    }
+
     setAuthLoading(true);
 
     const endpoint = authMode === 'signup' ? `${API_BASE}/auth/signup` : `${API_BASE}/auth/login`;
@@ -151,7 +236,13 @@ export default function App() {
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.detail || 'Authentication failed');
+        let msg = 'Authentication failed';
+        if (typeof data.detail === 'string') {
+          msg = data.detail;
+        } else if (Array.isArray(data.detail)) {
+          msg = data.detail.map(d => d.msg || `${d.loc?.join('.')}: invalid`).join(', ');
+        }
+        throw new Error(msg);
       }
       localStorage.setItem('documind_token', data.access_token);
       setToken(data.access_token);
@@ -595,71 +686,158 @@ export default function App() {
             <div className="auth-tabs">
               <button
                 className={`auth-tab ${authMode === 'login' ? 'active' : ''}`}
-                onClick={() => setAuthMode('login')}
+                onClick={() => handleSwitchAuthMode('login')}
               >
                 Sign In
               </button>
               <button
                 className={`auth-tab ${authMode === 'signup' ? 'active' : ''}`}
-                onClick={() => setAuthMode('signup')}
+                onClick={() => handleSwitchAuthMode('signup')}
               >
                 Sign Up
               </button>
             </div>
 
             {authError && (
-              <div style={{ color: '#fb7185', fontSize: '0.85rem', marginBottom: '18px', background: 'rgba(244, 63, 94, 0.1)', border: '1px solid rgba(244, 63, 94, 0.25)', padding: '12px', borderRadius: '8px' }}>
-                {authError}
+              <div className="auth-error-banner">
+                <AlertCircle size={16} style={{ flexShrink: 0, marginTop: '1px', color: '#f43f5e' }} />
+                <span className="banner-text">{authError}</span>
+                <button className="btn-close-banner" onClick={() => setAuthError('')} title="Dismiss">
+                  <X size={14} />
+                </button>
               </div>
             )}
 
-            <form onSubmit={handleAuth}>
+            <form onSubmit={handleAuth} noValidate>
               {authMode === 'signup' && (
                 <div className="form-group">
                   <label className="form-label">Email Address</label>
-                  <input
-                    type="email"
-                    className="form-input"
-                    required
-                    value={authForm.email}
-                    onChange={e => setAuthForm({ ...authForm, email: e.target.value })}
-                    placeholder="name@company.com"
-                  />
+                  <div className="form-input-wrapper">
+                    <input
+                      id="auth-email"
+                      type="email"
+                      autoComplete="email"
+                      className={`form-input${authTouched.email && fieldErrors.email ? ' is-invalid' : authTouched.email && !fieldErrors.email && authForm.email ? ' is-valid' : ''}`}
+                      value={authForm.email}
+                      onChange={e => handleFieldChange('email', e.target.value)}
+                      onBlur={() => handleFieldBlur('email')}
+                      placeholder="name@company.com"
+                    />
+                    {authTouched.email && (
+                      <span className="input-feedback-icon" style={{ pointerEvents: 'none' }}>
+                        {fieldErrors.email
+                          ? <AlertCircle size={15} color="#f43f5e" />
+                          : <CheckCircle2 size={15} color="#10b981" />
+                        }
+                      </span>
+                    )}
+                  </div>
+                  {authTouched.email && fieldErrors.email && (
+                    <div className="field-error-msg">
+                      <AlertCircle size={12} />
+                      {fieldErrors.email}
+                    </div>
+                  )}
                 </div>
               )}
 
               <div className="form-group">
                 <label className="form-label">{authMode === 'signup' ? 'Username' : 'Username or Email'}</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  required
-                  value={authForm.username}
-                  onChange={e => setAuthForm({ ...authForm, username: e.target.value })}
-                  placeholder="Enter your username"
-                />
+                <div className="form-input-wrapper">
+                  <input
+                    id="auth-username"
+                    type="text"
+                    autoComplete={authMode === 'signup' ? 'username' : 'username'}
+                    className={`form-input${authTouched.username && fieldErrors.username ? ' is-invalid' : authTouched.username && !fieldErrors.username && authForm.username ? ' is-valid' : ''}`}
+                    value={authForm.username}
+                    onChange={e => handleFieldChange('username', e.target.value)}
+                    onBlur={() => handleFieldBlur('username')}
+                    placeholder={authMode === 'signup' ? 'e.g. john_doe (min 3 chars)' : 'Your username or email'}
+                  />
+                  {authTouched.username && (
+                    <span className="input-feedback-icon" style={{ pointerEvents: 'none' }}>
+                      {fieldErrors.username
+                        ? <AlertCircle size={15} color="#f43f5e" />
+                        : <CheckCircle2 size={15} color="#10b981" />
+                      }
+                    </span>
+                  )}
+                </div>
+                {authTouched.username && fieldErrors.username && (
+                  <div className="field-error-msg">
+                    <AlertCircle size={12} />
+                    {fieldErrors.username}
+                  </div>
+                )}
+                {authMode === 'signup' && !fieldErrors.username && (
+                  <div className="field-hint-msg">Letters, numbers and underscores only · 3–50 characters</div>
+                )}
               </div>
 
               <div className="form-group">
                 <label className="form-label">Password</label>
-                <input
-                  type="password"
-                  className="form-input"
-                  required
-                  value={authForm.password}
-                  onChange={e => setAuthForm({ ...authForm, password: e.target.value })}
-                  placeholder="••••••••"
-                />
+                <div className="form-input-wrapper">
+                  <input
+                    id="auth-password"
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'}
+                    className={`form-input${authTouched.password && fieldErrors.password ? ' is-invalid' : authTouched.password && !fieldErrors.password && authForm.password ? ' is-valid' : ''}`}
+                    value={authForm.password}
+                    onChange={e => handleFieldChange('password', e.target.value)}
+                    onBlur={() => handleFieldBlur('password')}
+                    placeholder={authMode === 'signup' ? 'Min 6 characters' : '••••••••'}
+                    style={{ paddingRight: '52px' }}
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle-btn"
+                    style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)' }}
+                    onClick={() => setShowPassword(p => !p)}
+                    tabIndex={-1}
+                    title={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+                {authTouched.password && fieldErrors.password && (
+                  <div className="field-error-msg">
+                    <AlertCircle size={12} />
+                    {fieldErrors.password}
+                  </div>
+                )}
+                {authMode === 'signup' && authForm.password && (() => {
+                  const strength = getPasswordStrength(authForm.password);
+                  return (
+                    <div className="password-strength-container">
+                      <div className="strength-bars">
+                        {[1, 2, 3].map(lvl => (
+                          <div
+                            key={lvl}
+                            className="strength-bar"
+                            style={{ backgroundColor: strength.score >= lvl ? strength.color : undefined }}
+                          />
+                        ))}
+                      </div>
+                      <div className="strength-meta">
+                        <span>{strength.label && `Password strength: `}<strong style={{ color: strength.color }}>{strength.label}</strong></span>
+                        <span style={{ color: '#64748b' }}>min 6 chars</span>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               <button
                 type="submit"
+                id="auth-submit-btn"
                 className="btn-send"
-                style={{ width: '100%', height: '46px', justifyContent: 'center', marginTop: '12px' }}
+                style={{ width: '100%', height: '48px', justifyContent: 'center', marginTop: '16px', gap: '8px', borderRadius: '12px' }}
                 disabled={authLoading}
               >
-                {authLoading ? 'Verifying...' : (authMode === 'signup' ? 'Create Account' : 'Sign In')}
-                <ArrowRight size={16} />
+                {authLoading
+                  ? <><RefreshCw size={15} className="spin" /> Verifying...</>
+                  : <>{authMode === 'signup' ? 'Create Account' : 'Sign In'} <ArrowRight size={16} /></>
+                }
               </button>
             </form>
           </div>
@@ -845,35 +1023,59 @@ export default function App() {
                   </div>
                 </div>
               ) : (
-                chatHistory.map((item, idx) => (
-                  <div key={idx} className="chat-turn">
-                    {/* User Question Row */}
-                    <div className="user-message-row">
-                      <div className="user-bubble">{item.question}</div>
-                    </div>
+                chatHistory.map((item, idx) => {
+                  const isRefusal = item.answer && item.answer.includes('could not find an answer');
+                  const isOutOfScope = item.answer && item.answer.includes('not related to your uploaded documents');
+                  const isComparative = item.answer && (item.answer.includes('comparative breakdown') || item.answer.includes('comparing this with'));
+                  const responseTag = isRefusal ? { cls: 'refusal', label: '⚠ Not Found' }
+                    : isOutOfScope ? { cls: 'out-of-scope', label: 'ℹ Out of Scope' }
+                    : isComparative ? { cls: 'comparison', label: '⇄ Synthesis' }
+                    : { cls: 'grounded', label: '✓ Grounded' };
 
-                    {/* Assistant Response Card */}
-                    <div className="assistant-card">
-                      <div className="assistant-top">
-                        <div className="assistant-brand">
-                          <Sparkles size={16} />
-                          <span>DocuMind Synthesis</span>
-                        </div>
-                        <button
-                          onClick={() => copyToClipboard(item.answer, idx)}
-                          className="btn-copy"
-                          title="Copy Answer"
-                        >
-                          {copiedIdx === idx ? <Check size={12} color="#10b981" /> : <Copy size={12} />}
-                          <span>{copiedIdx === idx ? 'Copied!' : 'Copy'}</span>
-                        </button>
+                  return (
+                    <div key={idx} className="chat-turn">
+                      {/* User Question Row */}
+                      <div className="user-message-row">
+                        <div className="user-bubble">{item.question}</div>
+                        {user && (
+                          <div className="user-avatar-chip" title={user.username}>
+                            {user.username.charAt(0).toUpperCase()}
+                          </div>
+                        )}
                       </div>
+
+                      {/* Assistant Response Card */}
+                      <div className="assistant-card">
+                        <div className="assistant-top">
+                          <div className="assistant-meta-left">
+                            <div className="assistant-avatar">
+                              <Sparkles size={13} />
+                            </div>
+                            <span className="assistant-name">DocuMind</span>
+                            {!item.loading && item.answer && (
+                              <span className={`response-tag ${responseTag.cls}`}>{responseTag.label}</span>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => copyToClipboard(item.answer, idx)}
+                            className="btn-copy"
+                            title="Copy Answer"
+                            disabled={!item.answer}
+                          >
+                            {copiedIdx === idx ? <Check size={12} color="#10b981" /> : <Copy size={12} />}
+                            <span>{copiedIdx === idx ? 'Copied!' : 'Copy'}</span>
+                          </button>
+                        </div>
 
                       {/* Answer Content */}
                       {item.loading && !item.answer ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8', padding: '12px 0' }}>
-                          <RefreshCw size={18} className="spin" color="#06b6d4" />
-                          <span>Searching knowledge base & synthesizing response...</span>
+                        <div className="typing-box">
+                          <div className="typing-dots">
+                            <div className="typing-dot" />
+                            <div className="typing-dot" />
+                            <div className="typing-dot" />
+                          </div>
+                          <span>Searching knowledge base &amp; synthesizing response...</span>
                         </div>
                       ) : (
                         <div className="streamed-answer-box">
@@ -907,10 +1109,10 @@ export default function App() {
                       )}
 
                       {/* Performance & Token Metrics */}
-                      {item.usage && (
+                      {item.usage && !item.loading && (
                         <div className="metrics-row">
                           <div className="metrics-group">
-                            <span className="metric-item">⚡ {item.usage.latency_ms} ms</span>
+                            <span className="metric-item">⚡ {Math.round(item.usage.latency_ms)} ms</span>
                             <span className="metric-item">📊 {item.usage.total_tokens || 0} tokens</span>
                             <span className="metric-item">💎 ${Number(item.usage.estimated_cost_usd || 0).toFixed(6)}</span>
                           </div>
@@ -918,7 +1120,8 @@ export default function App() {
                       )}
                     </div>
                   </div>
-                ))
+                  );
+                })
               )}
               <div ref={chatEndRef} />
             </div>
@@ -927,21 +1130,26 @@ export default function App() {
             <form onSubmit={handleAsk} className="chat-input-bar">
               <div className="chat-input-wrapper">
                 <input
+                  id="chat-question-input"
                   type="text"
                   className="chat-input"
-                  placeholder="Ask a question grounded in your documents..."
+                  placeholder="Ask anything about your documents — general or specific..."
                   value={question}
                   onChange={e => setQuestion(e.target.value)}
                   disabled={asking}
                 />
+                {!asking && question.trim() === '' && (
+                  <span className="chat-kbd-hint">Enter ↵</span>
+                )}
               </div>
               <button
                 type="submit"
+                id="chat-send-btn"
                 className="btn-send"
                 disabled={asking || !question.trim()}
               >
                 {asking ? <RefreshCw size={16} className="spin" /> : <Send size={16} />}
-                <span>Ask</span>
+                <span>{asking ? 'Thinking...' : 'Ask'}</span>
               </button>
             </form>
           </section>
@@ -950,3 +1158,4 @@ export default function App() {
     </div>
   );
 }
+
